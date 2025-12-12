@@ -1,0 +1,1238 @@
+notepad
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CEHM Cosmic Fortune Draw</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000000; font-family: 'Times New Roman', serif; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10; pointer-events: none;
+        }
+        
+        .ui-hidden { opacity: 0; pointer-events: none !important; }
+
+        /* Loading */
+        #loader {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #010205; z-index: 100;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 1.5s ease-out; 
+        }
+        .loader-text {
+            color: #4B9CD3; /* 改为 Logo 蓝 */
+            font-size: 16px; letter-spacing: 8px; margin-top: 20px;
+            text-transform: uppercase; font-weight: 300;
+            text-shadow: 0 0 15px rgba(75, 156, 211, 0.8);
+            font-family: "Microsoft YaHei", serif;
+        }
+        .spinner {
+            width: 50px; height: 50px; 
+            border: 2px solid rgba(75, 156, 211, 0.2); 
+            border-top: 2px solid #4B9CD3; border-radius: 50%; 
+            animation: spin 1.5s linear infinite; 
+            box-shadow: 0 0 20px rgba(75, 156, 211, 0.4);
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Controls Container - Top Right & Scaled Down */
+        .controls-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            pointer-events: auto;
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-end;
+            transition: opacity 0.5s ease;
+            background: rgba(0, 20, 40, 0.6); 
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(75, 156, 211, 0.3);
+            backdrop-filter: blur(8px);
+            transform: scale(0.9);
+            transform-origin: top right;
+        }
+
+        /* Buttons */
+        .btn {
+            background: rgba(0, 30, 60, 0.8); 
+            border: 1px solid rgba(75, 156, 211, 0.5); 
+            color: #aaddff; 
+            padding: 6px 15px; 
+            cursor: pointer; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+            font-size: 11px;
+            transition: all 0.4s;
+            border-radius: 4px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-width: 80px;
+        }
+        .btn:hover { 
+            background: #4B9CD3; 
+            color: #fff; 
+            border-color: #aaddff;
+            box-shadow: 0 0 20px rgba(75, 156, 211, 0.6);
+        }
+        .btn-gold {
+            border-color: #4B9CD3;
+            color: #4B9CD3;
+        }
+        .btn-gold:hover {
+            background: #4B9CD3;
+            color: #000;
+            box-shadow: 0 0 20px rgba(75, 156, 211, 0.6);
+        }
+        .btn-icon {
+            font-size: 16px;
+            padding: 6px 10px;
+            min-width: unset;
+        }
+
+        /* Manager Modal */
+        #manager-modal {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%; max-width: 500px;
+            max-height: 80vh;
+            background: rgba(5, 15, 25, 0.95);
+            border: 1px solid #4B9CD3;
+            box-shadow: 0 0 50px rgba(0, 50, 100, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            pointer-events: auto;
+            backdrop-filter: blur(15px);
+            z-index: 1000;
+            color: #fff;
+            transition: opacity 0.3s;
+        }
+        #manager-modal.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid rgba(75, 156, 211, 0.3);
+            padding-bottom: 10px; margin-bottom: 15px;
+        }
+        .modal-title { font-family: "Microsoft YaHei"; font-weight: bold; color: #4B9CD3; letter-spacing: 2px; }
+        .modal-close { cursor: pointer; color: #ff5555; font-size: 20px; }
+        
+        .card-list {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            padding-right: 5px;
+        }
+        /* Scrollbar styling */
+        .card-list::-webkit-scrollbar { width: 6px; }
+        .card-list::-webkit-scrollbar-thumb { background: #003366; border-radius: 3px; }
+        
+        .card-item {
+            background: rgba(255, 255, 255, 0.05);
+            margin-bottom: 8px;
+            padding: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 3px solid #555;
+        }
+        .card-item.drawn {
+            opacity: 0.5;
+            border-left-color: #333;
+            text-decoration: line-through;
+        }
+        .card-item.active {
+            border-left-color: #4B9CD3;
+            background: rgba(75, 156, 211, 0.1);
+        }
+        .card-info { display: flex; flex-direction: column; gap: 2px; }
+        .card-text { font-size: 14px; color: #fff; font-weight: bold; }
+        .card-sig { font-size: 11px; color: #aaa; }
+        .delete-btn { color: #ff5555; cursor: pointer; padding: 5px; font-size: 18px; margin-left: 5px; }
+        .delete-btn:hover { color: #ff0000; }
+        
+        /* New Reset Button Style */
+        .reset-btn { color: #00ffff; cursor: pointer; padding: 5px; font-size: 16px; margin-left: 10px; font-weight: bold;}
+        .reset-btn:hover { color: #88ffff; text-shadow: 0 0 5px #00ffff; }
+
+        .add-form {
+            display: flex; gap: 8px; margin-bottom: 15px;
+        }
+        .modal-input {
+            background: rgba(0,0,0,0.5); border: 1px solid #555;
+            color: white; padding: 8px; flex: 1; border-radius: 4px;
+            outline: none;
+        }
+        .modal-input:focus { border-color: #4B9CD3; }
+
+        /* Separated Hint Text - Bottom Center */
+        .bottom-hint {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(200, 230, 255, 0.5);
+            font-size: 14px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-shadow: 0 0 5px rgba(0,0,0,0.8);
+            pointer-events: none;
+            text-align: center;
+            width: 100%;
+            font-weight: bold;
+            font-family: "Microsoft YaHei";
+            transition: color 0.3s;
+        }
+
+        /* Webcam feedback */
+        #webcam-wrapper {
+            position: absolute; bottom: 60px; right: 20px;
+            width: 140px; height: 105px;
+            border: 1px solid rgba(75, 156, 211, 0.3);
+            overflow: hidden; 
+            opacity: 0.7; 
+            pointer-events: none;
+            background: rgba(0, 10, 20, 0.6);
+            z-index: 100;
+            box-shadow: 0 0 20px rgba(0, 100, 200, 0.1);
+            border-radius: 8px;
+        }
+        
+        #webcam-preview {
+            width: 100%; height: 100%;
+            transform: scaleX(-1); 
+        }
+        
+        @media (max-width: 600px) {
+            .controls-container { top: 10px; right: 10px; transform: scale(0.8); }
+            #webcam-wrapper { bottom: 20px; right: 10px; width: 100px; height: 75px; }
+            .bottom-hint { font-size: 12px; bottom: 20px; }
+        }
+    </style>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+                "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/+esm"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        <div class="loader-text">祈福星阵部署中...</div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        
+        <!-- Top Right Controls -->
+        <div class="controls-container">
+            <button id="open-manager-btn" class="btn btn-gold">
+                ⚙️ 天机册 (管理卡片)
+            </button>
+        </div>
+
+        <!-- Manager Modal (Hidden by default) -->
+        <div id="manager-modal" class="hidden">
+            <div class="modal-header">
+                <div class="modal-title">天机册 - 符签管理</div>
+                <div class="modal-close" id="close-manager-btn">×</div>
+            </div>
+            
+            <div class="add-form">
+                <input type="text" id="mgr-text" class="modal-input" placeholder="输入祝福语">
+                <input type="text" id="mgr-sig" class="modal-input" placeholder="署名" style="flex:0.4">
+                <button id="mgr-add-btn" class="btn btn-gold">添加</button>
+            </div>
+
+            <div class="card-list" id="card-list-container">
+                <!-- Cards will be injected here -->
+            </div>
+
+            <div style="text-align: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+                <button id="mgr-reset-btn" class="btn">重置所有状态</button>
+                <div style="font-size: 10px; color: #666; margin-top: 5px;">共 <span id="card-count">0</span> 张，已抽 <span id="drawn-count">0</span> 张</div>
+            </div>
+        </div>
+
+        <!-- Bottom Center Hint -->
+        <div class="bottom-hint">
+            流程: 握拳重置 → 张开手掌激活 → OK手势抽取
+        </div>
+    </div>
+
+    <div id="webcam-wrapper">
+        <video id="webcam" autoplay playsinline style="display:none;"></video>
+        <canvas id="webcam-preview"></canvas>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'; 
+        import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+
+        // --- DATA MANAGEMENT ---
+        let fortuneDatabase = [
+            { id: 1, text: "万事胜意", signature: "幸运星", isDrawn: false },
+            { id: 2, text: "前程似锦 未来可期", signature: "文曲星", isDrawn: false },
+            { id: 3, text: "身体健康 百病不侵", signature: "守护神", isDrawn: false },
+            { id: 4, text: "平安喜乐 岁岁无忧", signature: "福星", isDrawn: false },
+            { id: 5, text: "心想事成 美梦成真", signature: "许愿池", isDrawn: false },
+            { id: 6, text: "财源广进 日进斗金", signature: "财神到", isDrawn: false },
+            { id: 7, text: "好运连连 锦鲤附体", signature: "锦鲤", isDrawn: false },
+            { id: 8, text: "不忘初心 方得始终", signature: "领航员", isDrawn: false }
+        ];
+
+        // --- CONFIGURATION ---
+        const CONFIG = {
+            colors: {
+                bg: 0x010205, 
+                rockBlue: 0x0088ff,
+                textEnergy: 0xffffff, 
+                spaceDark: 0x010205,
+                // Updated colors for blue theme
+                cardFrame: 0x4B9CD3, // Logo Blue
+                cardFrameEmissive: 0x0044aa
+            },
+            particles: {
+                // OPTIMIZATION: Balanced count for performance/visual ratio
+                count: 8500,
+                dustCount: 1000, 
+            },
+            camera: {
+                z: 75 
+            }
+        };
+
+        const STATE = {
+            mode: 'LOGO', 
+            focusIndex: -1, 
+            focusTarget: null,
+            hand: { detected: false, x: 0, y: 0 },
+            rotation: { x: 0, y: 0 },
+            readyToDraw: false 
+        };
+
+        let scene, camera, renderer, composer;
+        let mainGroup; 
+        let clock = new THREE.Clock();
+        let particleSystem = []; 
+        let stripMeshGroup = new THREE.Group();
+        let handLandmarker, video, webcamCanvas, webcamCtx;
+        let logoPoints = []; 
+
+        async function init() {
+            generateLogoPoints();
+            initThree();
+            setupEnvironment(); 
+            createStarfield(); 
+            createNebula();    
+            setupLights();
+            createParticles(); 
+            createDust();      
+            
+            // Initial strip generation based on DB
+            refreshStripsFromDB();
+
+            setupPostProcessing();
+            setupEvents();
+            setupManagerUI(); // Initialize the new UI logic
+            
+            try {
+                await initMediaPipe();
+            } catch (e) {
+                console.warn("MediaPipe/Webcam failed to initialize:", e);
+            }
+            
+            const loader = document.getElementById('loader');
+            loader.style.opacity = 0;
+            setTimeout(() => loader.remove(), 1500);
+
+            animate();
+        }
+
+        // --- MANAGER UI LOGIC ---
+        function setupManagerUI() {
+            const modal = document.getElementById('manager-modal');
+            const openBtn = document.getElementById('open-manager-btn');
+            const closeBtn = document.getElementById('close-manager-btn');
+            const listContainer = document.getElementById('card-list-container');
+            const addBtn = document.getElementById('mgr-add-btn');
+            const resetBtn = document.getElementById('mgr-reset-btn');
+
+            // Toggle
+            openBtn.addEventListener('click', () => {
+                renderCardList();
+                modal.classList.remove('hidden');
+            });
+            closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+
+            // Add Card
+            addBtn.addEventListener('click', () => {
+                const textInput = document.getElementById('mgr-text');
+                const sigInput = document.getElementById('mgr-sig');
+                const text = textInput.value.trim();
+                const sig = sigInput.value.trim() || "匿名";
+                
+                if (text) {
+                    const newId = Date.now();
+                    fortuneDatabase.push({ id: newId, text: text, signature: sig, isDrawn: false });
+                    textInput.value = "";
+                    sigInput.value = "";
+                    renderCardList();
+                    refreshStripsFromDB(); // Sync 3D
+                }
+            });
+
+            // Reset All
+            resetBtn.addEventListener('click', () => {
+                fortuneDatabase.forEach(card => card.isDrawn = false);
+                renderCardList();
+                refreshStripsFromDB(); // Sync 3D (to reset colors/states)
+            });
+
+            // Delegate events (Delete & Reset Single)
+            listContainer.addEventListener('click', (e) => {
+                const id = parseInt(e.target.dataset.id);
+                
+                // Handle Delete
+                if (e.target.classList.contains('delete-btn')) {
+                    fortuneDatabase = fortuneDatabase.filter(c => c.id !== id);
+                    renderCardList();
+                    refreshStripsFromDB();
+                }
+                
+                // Handle Reset Single Card
+                if (e.target.classList.contains('reset-btn')) {
+                    const card = fortuneDatabase.find(c => c.id === id);
+                    if(card) {
+                        card.isDrawn = false; // Reset status
+                        renderCardList();     // Update UI
+                        refreshStripsFromDB(); // Update 3D scene
+                    }
+                }
+            });
+        }
+
+        function renderCardList() {
+            const container = document.getElementById('card-list-container');
+            container.innerHTML = '';
+            
+            let drawnCount = 0;
+
+            fortuneDatabase.forEach(card => {
+                if(card.isDrawn) drawnCount++;
+                
+                const item = document.createElement('div');
+                item.className = `card-item ${card.isDrawn ? 'drawn' : 'active'}`;
+                
+                // Logic for showing the reset button only if drawn
+                const resetButton = card.isDrawn ? `<span class="reset-btn" data-id="${card.id}" title="重新放入星空">↻ 归位</span>` : '';
+
+                item.innerHTML = `
+                    <div class="card-info" style="flex:1">
+                        <div class="card-text">${card.text}</div>
+                        <div class="card-sig">
+                            ${card.isDrawn ? '<span class="card-status status-drawn">已抽取</span>' : '<span class="card-status status-new">待抽取</span>'}
+                            ${card.signature}
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center;">
+                        ${resetButton}
+                        <div class="delete-btn" data-id="${card.id}" title="删除">×</div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+
+            document.getElementById('card-count').innerText = fortuneDatabase.length;
+            document.getElementById('drawn-count').innerText = drawnCount;
+        }
+
+        // --- 3D SCENE SYNC ---
+        function refreshStripsFromDB() {
+            // 1. Clear existing strips from Scene
+            stripMeshGroup.clear(); // Three.js helper to remove children
+            
+            // 2. Remove strip particles from system array
+            particleSystem = particleSystem.filter(p => p.type !== 'STRIP');
+
+            // 3. Rebuild based on DB
+            fortuneDatabase.forEach(card => {
+                const tex = createStripTexture(card.text, card.signature);
+                addStripToScene(tex, card.id);
+            });
+        }
+
+        // --- PROCEDURAL LOGO GENERATION (High Def) ---
+        function generateLogoPoints() {
+            const size = 512;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, size, size);
+
+            const cx = size / 2;
+            const cy = size / 2;
+            const outerR = size * 0.45;
+            const innerR = size * 0.30;
+
+            // Blue Ring
+            ctx.beginPath();
+            ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+            ctx.arc(cx, cy, innerR, 0, Math.PI * 2, true); 
+            ctx.fillStyle = '#4B9CD3';
+            ctx.fill();
+
+            // Airplane
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(-Math.PI / 4); 
+            ctx.font = 'bold 180px sans-serif'; 
+            ctx.fillStyle = '#4B9CD3';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('✈', 0, 10); 
+            ctx.restore();
+
+            // Text Generation
+            drawTextAlongArc(ctx, "CEHM", cx, cy, (outerR + innerR) / 2, Math.PI / 2, -0.4, 65, '#FFFFFF');
+            drawTextAlongArc(ctx, "教育健康管理学院", cx, cy, (outerR + innerR) / 2, -Math.PI / 2, 0.6, 52, '#FFFFFF');
+
+            const imgData = ctx.getImageData(0, 0, size, size);
+            const data = imgData.data;
+            
+            // High density sampling (Step 2)
+            for (let y = 0; y < size; y += 2) { 
+                for (let x = 0; x < size; x += 2) {
+                    const i = (y * size + x) * 4;
+                    const alpha = data[i + 3];
+                    
+                    if (alpha > 128) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        
+                        let colorType = 'BLUE';
+                        if (r > 200 && g > 200 && b > 200) colorType = 'TEXT';
+
+                        const pX = (x - cx) / size * 55; 
+                        const pY = -(y - cy) / size * 55; 
+                        
+                        logoPoints.push({
+                            x: pX, 
+                            y: pY, 
+                            z: (Math.random() - 0.5) * 2.0, 
+                            type: colorType
+                        });
+                    }
+                }
+            }
+            
+            // Shuffle
+            for (let i = logoPoints.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [logoPoints[i], logoPoints[j]] = [logoPoints[j], logoPoints[i]];
+            }
+        }
+
+        function drawTextAlongArc(ctx, str, cx, cy, radius, startAngle, spread, fontSize, color) {
+            ctx.font = `900 ${fontSize}px "Microsoft YaHei", "SimHei", sans-serif`;
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            const totalAngle = spread * Math.PI; 
+            const anglePerChar = totalAngle / (str.length - 1 || 1);
+            const start = startAngle - totalAngle / 2;
+
+            for (let i = 0; i < str.length; i++) {
+                const char = str[i];
+                const angle = start + i * anglePerChar;
+                
+                ctx.save();
+                ctx.translate(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+                ctx.rotate(angle + Math.PI / 2); 
+                ctx.fillText(char, 0, 0);
+                ctx.restore();
+            }
+        }
+
+        // --- BACKGROUND GENERATION ---
+        function createStarfield() {
+            const starsGeometry = new THREE.BufferGeometry();
+            const starsCount = 2000;
+            const posArray = new Float32Array(starsCount * 3);
+            const sizeArray = new Float32Array(starsCount);
+
+            for(let i = 0; i < starsCount * 3; i+=3) {
+                const r = 300 + Math.random() * 400;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                posArray[i] = r * Math.sin(phi) * Math.cos(theta);
+                posArray[i+1] = r * Math.sin(phi) * Math.sin(theta);
+                posArray[i+2] = r * Math.cos(phi);
+                sizeArray[i/3] = Math.random() * 1.5;
+            }
+
+            starsGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            starsGeometry.setAttribute('size', new THREE.BufferAttribute(sizeArray, 1));
+
+            const starsMaterial = new THREE.PointsMaterial({
+                color: 0xffffff, size: 0.8, transparent: true, opacity: 0.8, sizeAttenuation: true
+            });
+            const starField = new THREE.Points(starsGeometry, starsMaterial);
+            scene.add(starField);
+        }
+
+        function createNebula() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+            grad.addColorStop(0, 'rgba(60, 10, 20, 0.3)'); 
+            grad.addColorStop(0.6, 'rgba(40, 10, 60, 0.1)'); 
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,128,128);
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.SpriteMaterial({ 
+                map: tex, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending 
+            });
+
+            for(let i=0; i<8; i++) {
+                const sprite = new THREE.Sprite(mat);
+                const r = 150 + Math.random() * 50;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI; 
+                sprite.position.set(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi) - 50);
+                const scale = 120 + Math.random() * 100;
+                sprite.scale.set(scale, scale, 1);
+                scene.add(sprite);
+            }
+        }
+
+        function initThree() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(CONFIG.colors.bg);
+            scene.fog = new THREE.FogExp2(0x100505, 0.002); 
+
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.set(0, 0, CONFIG.camera.z); 
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping; 
+            renderer.toneMappingExposure = 1.0; 
+            container.appendChild(renderer.domElement);
+
+            mainGroup = new THREE.Group();
+            scene.add(mainGroup);
+        }
+
+        function setupEnvironment() {
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+        }
+
+        function setupLights() {
+            const ambient = new THREE.AmbientLight(0x442222, 0.2); 
+            scene.add(ambient);
+            const sunLight = new THREE.DirectionalLight(0xffddaa, 1.2);
+            sunLight.position.set(50, 30, 50);
+            scene.add(sunLight);
+            const rimLight = new THREE.SpotLight(0xff3333, 8.0);
+            rimLight.position.set(-40, 0, 10);
+            rimLight.lookAt(0,0,0);
+            scene.add(rimLight);
+            const centerLight = new THREE.PointLight(0xffaa00, 2, 40);
+            mainGroup.add(centerLight);
+        }
+
+        function setupPostProcessing() {
+            const renderScene = new RenderPass(scene, camera);
+            const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+            bloomPass.threshold = 0.2; 
+            bloomPass.strength = 0.8;  
+            bloomPass.radius = 0.4;    
+            composer = new EffectComposer(renderer);
+            composer.addPass(renderScene);
+            composer.addPass(bloomPass);
+        }
+
+        class Particle {
+            constructor(mesh, targetPoint) {
+                this.mesh = mesh;
+                this.isDust = false;
+                this.type = targetPoint.type; 
+                this.isDrawn = false; 
+                this.dbId = targetPoint.dbId || null; 
+                
+                this.posLogo = new THREE.Vector3(targetPoint.x, targetPoint.y, targetPoint.z);
+                this.posScatter = new THREE.Vector3();
+                this.currentTarget = new THREE.Vector3(); 
+                
+                this.baseScale = mesh.scale.x; 
+
+                // Flight Animation State
+                this.isFlying = false;
+                this.flightProgress = 0;
+                this.flightStartPos = new THREE.Vector3();
+                this.flightControlPos = new THREE.Vector3(); // For Bezier curve
+                this.flightDuration = 1.0;
+
+                const rScatter = 40 + Math.random() * 40; 
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                this.posScatter.set(
+                    rScatter * Math.sin(phi) * Math.cos(theta),
+                    rScatter * Math.sin(phi) * Math.sin(theta),
+                    rScatter * Math.cos(phi)
+                );
+
+                this.mesh.position.copy(this.posScatter);
+                
+                this.rotSpeed = new THREE.Vector3(
+                    (Math.random()-0.5) * 2.0,
+                    (Math.random()-0.5) * 2.0,
+                    (Math.random()-0.5) * 2.0
+                );
+            }
+
+            update(dt, mode, focusTargetMesh) {
+                let s = this.baseScale;
+
+                // Reuse Logo Motion Logic
+                const applyLogoMotion = () => {
+                    this.mesh.rotation.x += this.rotSpeed.x * dt * 0.5;
+                    this.mesh.rotation.y += this.rotSpeed.y * dt * 0.5;
+                    this.mesh.rotation.z += this.rotSpeed.z * dt * 0.5;
+                    const drift = Math.sin(clock.elapsedTime * 0.5 + this.mesh.position.x * 0.1) * 0.2;
+                    this.currentTarget.copy(this.posLogo);
+                    this.currentTarget.y += drift;
+                };
+
+                // RESET FLIGHT if not focused
+                if (mode !== 'FOCUS' || this.mesh !== focusTargetMesh) {
+                    this.isFlying = false;
+                    this.flightProgress = 0;
+                }
+
+                if (mode === 'SCATTER') {
+                    this.currentTarget.copy(this.posScatter);
+                    // Standard lerp for scatter
+                    this.mesh.rotation.x += this.rotSpeed.x * dt;
+                    this.mesh.rotation.y += this.rotSpeed.y * dt;
+                    this.mesh.position.lerp(this.currentTarget, 2.0 * dt);
+                    this.mesh.scale.lerp(new THREE.Vector3(s,s,s), 3*dt);
+                
+                } else if (mode === 'FOCUS') {
+                    if (this.mesh === focusTargetMesh) {
+                        const desiredWorldPos = new THREE.Vector3(0, 0, 40); 
+                        const invMatrix = new THREE.Matrix4().copy(mainGroup.matrixWorld).invert();
+                        const finalTarget = desiredWorldPos.applyMatrix4(invMatrix);
+                        s = 3.8; 
+
+                        // INITIALIZE FLIGHT
+                        if (!this.isFlying && this.flightProgress === 0) {
+                            this.isFlying = true;
+                            
+                            // UPDATED: Start from center to simulate emerging from particles
+                            this.flightStartPos.set(
+                                (Math.random() - 0.5) * 2, 
+                                (Math.random() - 0.5) * 2, 
+                                (Math.random() - 0.5) * 2 
+                            );
+                            
+                            this.mesh.position.copy(this.flightStartPos);
+                            this.mesh.scale.setScalar(0.01); // Start almost invisible
+
+                            // Calculate random control point for Bezier
+                            const midPoint = new THREE.Vector3().addVectors(this.flightStartPos, finalTarget).multiplyScalar(0.5);
+                            
+                            // Large random arc
+                            const randomOffset = new THREE.Vector3(
+                                (Math.random() - 0.5) * 60, 
+                                (Math.random() - 0.5) * 60, 
+                                (Math.random() - 0.5) * 30   
+                            );
+                            this.flightControlPos.addVectors(midPoint, randomOffset);
+                            this.flightDuration = 1.2; 
+                        }
+
+                        if (this.isFlying) {
+                            this.flightProgress += dt / this.flightDuration;
+                            
+                            if (this.flightProgress >= 1) {
+                                this.flightProgress = 1;
+                            }
+
+                            // Quadratic Bezier
+                            const t = this.flightProgress;
+                            const invT = 1 - t;
+                            const p0 = this.flightStartPos;
+                            const p1 = this.flightControlPos;
+                            const p2 = finalTarget;
+
+                            this.mesh.position.x = (invT * invT * p0.x) + (2 * invT * t * p1.x) + (t * t * p2.x);
+                            this.mesh.position.y = (invT * invT * p0.y) + (2 * invT * t * p1.y) + (t * t * p2.y);
+                            this.mesh.position.z = (invT * invT * p0.z) + (2 * invT * t * p1.z) + (t * t * p2.z);
+
+                            // Scale up during flight
+                            const currentScale = 0.01 + (s - 0.01) * Math.min(this.flightProgress * 1.5, 1);
+                            this.mesh.scale.setScalar(currentScale);
+
+                            // Rotation: Chaotic spin decreasing with t
+                            if (t < 0.9) {
+                                this.mesh.rotation.x += (10 * invT) * dt;
+                                this.mesh.rotation.y += (5 * invT) * dt;
+                                this.mesh.rotation.z += (8 * invT) * dt;
+                            } 
+                        } 
+                        
+                        if (this.flightProgress >= 1) {
+                            // Arrived
+                            this.mesh.position.copy(finalTarget);
+                            this.mesh.scale.setScalar(s);
+                            
+                            // Smoothly damp rotation to face camera
+                            const targetLook = new THREE.Object3D();
+                            targetLook.position.copy(this.mesh.position);
+                            
+                            const localCamPos = camera.position.clone();
+                            mainGroup.worldToLocal(localCamPos);
+                            targetLook.lookAt(localCamPos);
+                            
+                            this.mesh.quaternion.slerp(targetLook.quaternion, 10 * dt);
+                        }
+
+                        // --- BORDER PULSE ---
+                        const frameMesh = this.mesh.children[0];
+                        if (frameMesh && frameMesh.material) {
+                            const pulse = (Math.sin(clock.elapsedTime * 10) * 0.5 + 0.5); 
+                            frameMesh.material.emissiveIntensity = 1.0 + pulse * 2.5;
+                        }
+
+                    } else {
+                        applyLogoMotion();
+                        // Standard lerp for non-focused
+                        this.mesh.position.lerp(this.currentTarget, 2.0 * dt);
+                        this.mesh.scale.lerp(new THREE.Vector3(s,s,s), 3*dt);
+                    }
+                } else {
+                    applyLogoMotion();
+                    this.mesh.position.lerp(this.currentTarget, 2.0 * dt);
+                    this.mesh.scale.lerp(new THREE.Vector3(s,s,s), 3*dt);
+                    
+                    // Reset emissive
+                     if (this.type === 'STRIP' && this.mesh.children[0]) {
+                        this.mesh.children[0].material.emissiveIntensity = 0.5;
+                    }
+                }
+            }
+        }
+
+        // --- CREATION ---
+        function createParticles() {
+            const geoRock = new THREE.IcosahedronGeometry(0.25, 0); 
+            const geoTech = new THREE.TetrahedronGeometry(0.25, 0);
+            
+            const matText = new THREE.MeshStandardMaterial({
+                color: CONFIG.colors.textEnergy,
+                roughness: 0.4,
+                metalness: 0.8,
+                flatShading: true,
+                emissive: 0xffffff,
+                emissiveIntensity: 1.2
+            });
+
+            const matBlue = new THREE.MeshStandardMaterial({
+                color: CONFIG.colors.rockBlue,
+                roughness: 0.4,
+                metalness: 0.8,
+                flatShading: true,
+                emissive: 0x002288,
+                emissiveIntensity: 0.4
+            });
+
+            for (let i = 0; i < CONFIG.particles.count; i++) {
+                let targetPoint = (logoPoints.length > 0) ? logoPoints[i % logoPoints.length] : {x:0, y:0, z:0, type:'BLUE'};
+                let mesh;
+                
+                if (targetPoint.type === 'TEXT') {
+                    mesh = new THREE.Mesh(geoTech, matText); 
+                    mesh.scale.setScalar(0.5 + Math.random() * 0.3); 
+                } else {
+                    const rand = Math.random();
+                    if (rand > 0.6) {
+                        mesh = new THREE.Mesh(geoTech, matBlue);
+                    } else {
+                        mesh = new THREE.Mesh(geoRock, matBlue);
+                    }
+                    mesh.scale.setScalar(0.5 + Math.random() * 0.6);
+                }
+                
+                mesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+
+                mainGroup.add(mesh);
+                particleSystem.push(new Particle(mesh, targetPoint));
+            }
+
+            mainGroup.add(stripMeshGroup);
+        }
+
+        function createDust() {
+            const geo = new THREE.TetrahedronGeometry(0.08, 0);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent: true, opacity: 0.4 });
+            
+            for(let i=0; i<CONFIG.particles.dustCount; i++) {
+                 const mesh = new THREE.Mesh(geo, mat);
+                 mesh.scale.setScalar(0.5 + Math.random());
+                 
+                 const r = 40 + Math.random() * 50; 
+                 const theta = Math.random() * Math.PI * 2;
+                 const phi = Math.acos(2 * Math.random() - 1);
+                 mesh.position.set(
+                    r * Math.sin(phi) * Math.cos(theta),
+                    r * Math.sin(phi) * Math.sin(theta),
+                    r * Math.cos(phi)
+                  );
+                 
+                 mainGroup.add(mesh);
+            }
+        }
+
+        function createStripTexture(text, signature) {
+            const width = 512; const height = 768; 
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            // --- NEW COLOR THEME: DEEP BLUE COSMIC ---
+            const grad = ctx.createLinearGradient(0, 0, width, height);
+            grad.addColorStop(0, '#001529');   // Deep Midnight
+            grad.addColorStop(0.5, '#002b4d'); // Dark Cosmic Blue
+            grad.addColorStop(1, '#000f1f');   // Near Black
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, width, height);
+            
+            // --- NEW ACCENTS: CYAN/STARDUST ---
+            ctx.fillStyle = 'rgba(75, 156, 211, 0.15)'; // Logo Blue faint
+            for(let i=0; i<300; i++) ctx.fillRect(Math.random()*width, Math.random()*height, 3, 3);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'; // White stars
+            for(let i=0; i<50; i++) ctx.fillRect(Math.random()*width, Math.random()*height, 2, 2);
+
+            // --- NEW BORDER: ELECTRIC BLUE ---
+            ctx.strokeStyle = '#4B9CD3'; // Logo Blue
+            ctx.lineWidth = 20; ctx.lineJoin = "round";
+            ctx.strokeRect(20, 20, width - 40, height - 40);
+            ctx.lineWidth = 4; 
+            ctx.strokeStyle = '#88CCFF'; // Lighter blue inner line
+            ctx.strokeRect(35, 35, width - 70, height - 70);
+
+            // --- TEXT RENDERING IMPROVEMENT ---
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            
+            // 1. Increase Font Size & Weight
+            const fontSize = 52; 
+            ctx.font = `900 ${fontSize}px "Microsoft YaHei", "SimHei", sans-serif`;
+            
+            const maxLineWidth = width - 120;
+            const words = text.split('');
+            let line = ''; let lines = [];
+            for(let n = 0; n < words.length; n++) {
+                let testLine = line + words[n];
+                let metrics = ctx.measureText(testLine);
+                if (metrics.width > maxLineWidth && n > 0) { lines.push(line); line = words[n]; }
+                else { line = testLine; }
+            }
+            lines.push(line);
+
+            const lineHeight = fontSize * 1.5;
+            const totalTextHeight = lines.length * lineHeight;
+            let startY = (height / 2) - (totalTextHeight / 2) - 40; 
+            
+            // 2. Multi-pass Text Drawing (Outline + Sharp Fill + Hard Shadow)
+            // UPDATED: Removed glow, added hard black shadow and outline for clarity in bloom
+            for (let i = 0; i < lines.length; i++) {
+                const y = startY + (i * lineHeight);
+                const x = width / 2;
+
+                // Pass 1: Strong Black Outline (Foundation)
+                ctx.lineWidth = 10; // 增加描边宽度，提高对比度
+                ctx.strokeStyle = "rgba(0, 0, 0, 1.0)"; // 纯黑不透明
+                ctx.lineJoin = 'round';
+                ctx.strokeText(lines[i], x, y);
+
+                // Pass 2: Subtle Dark Shadow (Depth)
+                ctx.shadowColor = "rgba(0, 0, 0, 1.0)";
+                ctx.shadowBlur = 0; // 移除模糊，保持锐利
+                ctx.shadowOffsetX = 4; // 稍微增加投影距离
+                ctx.shadowOffsetY = 4;
+                
+                // Pass 3: Text Body
+                // 关键修改：降低填充颜色的亮度。
+                // 在 Bloom 开启的情况下，亮度高的颜色会产生强烈的辉光导致边缘模糊。
+                // 使用中灰/灰蓝色 (#99AACC) 在 Bloom 后处理下会呈现出“清晰的微发光白色/浅蓝”效果，而不是“刺眼的白光”。
+                ctx.fillStyle = "#99AACC"; 
+                ctx.fillText(lines[i], x, y);
+
+                // Reset shadow for next operations
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+            }
+            
+            if (signature) {
+                const sigX = width - 120; const sigY = height - 100;
+                ctx.save(); ctx.translate(sigX, sigY); ctx.rotate(-0.1); 
+                
+                // Signature Background
+                ctx.fillStyle = 'rgba(0, 20, 40, 0.8)'; 
+                ctx.fillRect(-60, -40, 120, 80);
+                
+                // Signature Border
+                ctx.strokeStyle = 'rgba(75, 156, 211, 0.6)'; 
+                ctx.lineWidth = 3; 
+                ctx.strokeRect(-55, -35, 110, 70);
+                
+                // Signature Text
+                ctx.font = 'bold 24px "Microsoft YaHei"'; 
+                ctx.fillStyle = '#88AACC'; // Darker Light Blue
+                ctx.shadowBlur = 0;
+                ctx.fillText(signature, 0, 5); 
+                ctx.restore();
+            }
+            
+            // Decorative symbols
+            ctx.font = '40px serif'; ctx.fillStyle = '#4B9CD3';
+            ctx.fillText("✦", width / 2, 80); ctx.fillText("✦", width / 2, height - 40);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
+
+        function addStripToScene(texture, dbId) {
+            const width = 2.2; const height = 3.3; 
+            const frameGeo = new THREE.BoxGeometry(width + 0.1, height + 0.1, 0.1); 
+            
+            // --- NEW FRAME MATERIAL ---
+            const frameMat = new THREE.MeshPhysicalMaterial({ 
+                color: CONFIG.colors.cardFrame, // Logo Blue
+                metalness: 1.0, 
+                roughness: 0.1, 
+                transparent: true, 
+                opacity: 0.9,
+                emissive: CONFIG.colors.cardFrameEmissive,
+                emissiveIntensity: 0.5 
+            });
+            
+            const frame = new THREE.Mesh(frameGeo, frameMat);
+            const paperGeo = new THREE.PlaneGeometry(width, height);
+            const paperMat = new THREE.MeshBasicMaterial({ map: texture });
+            const paper = new THREE.Mesh(paperGeo, paperMat);
+            paper.position.z = 0.051; 
+            const group = new THREE.Group();
+            group.add(frame); group.add(paper);
+            
+            const r = 35;
+            const theta = Math.random() * Math.PI * 2; const phi = Math.random() * Math.PI;
+            group.position.set(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+            group.scale.set(0,0,0); 
+            stripMeshGroup.add(group);
+            particleSystem.push(new Particle(group, {x:0, y:0, z:0, type:'STRIP', dbId: dbId})); 
+        }
+
+        async function initMediaPipe() {
+            video = document.getElementById('webcam');
+            webcamCanvas = document.getElementById('webcam-preview');
+            webcamCtx = webcamCanvas.getContext('2d');
+            webcamCanvas.width = 160; webcamCanvas.height = 120;
+            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
+            handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" },
+                runningMode: "VIDEO", numHands: 1,
+                minHandDetectionConfidence: 0.3, minHandPresenceConfidence: 0.3, minTrackingConfidence: 0.3
+            });
+            if (navigator.mediaDevices?.getUserMedia) {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                video.addEventListener("loadeddata", predictWebcam);
+            }
+        }
+
+        let lastVideoTime = -1;
+        async function predictWebcam() {
+            if (video.currentTime !== lastVideoTime) {
+                lastVideoTime = video.currentTime;
+                if (handLandmarker) {
+                    const result = handLandmarker.detectForVideo(video, performance.now());
+                    processGestures(result);
+                }
+            }
+            requestAnimationFrame(predictWebcam);
+        }
+
+        // --- Helper for UI Hint Updates ---
+        const hintEl = document.querySelector('.bottom-hint');
+        function updateHint(msg) {
+            if (hintEl.innerText !== msg) {
+                hintEl.innerText = msg;
+                hintEl.style.color = "#fff"; // Flash white
+                setTimeout(() => hintEl.style.color = "rgba(200, 230, 255, 0.8)", 300);
+            }
+        }
+
+        function processGestures(result) {
+            webcamCtx.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
+            if (result.landmarks && result.landmarks.length > 0) {
+                STATE.hand.detected = true;
+                const lm = result.landmarks[0];
+                drawHandSkeleton(webcamCtx, lm, 'rgba(0, 255, 255, 0.8)');
+                STATE.hand.x = (lm[9].x - 0.5) * 2; STATE.hand.y = (lm[9].y - 0.5) * 2;
+                const thumb = lm[4]; const index = lm[8]; const wrist = lm[0];
+                const middle = lm[12]; const ring = lm[16]; const pinky = lm[20];
+                const pinchDist = Math.hypot(thumb.x - index.x, thumb.y - index.y);
+                const otherFingersAvg = (Math.hypot(middle.x - wrist.x, middle.y - wrist.y) + Math.hypot(ring.x - wrist.x, ring.y - wrist.y) + Math.hypot(pinky.x - wrist.x, pinky.y - wrist.y)) / 3;
+                const allTips = [index, middle, ring, pinky];
+                let avgDist = 0; allTips.forEach(t => avgDist += Math.hypot(t.x - wrist.x, t.y - wrist.y)); avgDist /= 4;
+
+                // 1. 握拳检测 (Reset)
+                if (avgDist < 0.25) {
+                    STATE.mode = 'LOGO'; STATE.focusTarget = null; 
+                    STATE.readyToDraw = false; // 重置激活状态
+                    updateHint("手势: 握拳重置 | 请先张开手掌激活星阵");
+                    drawHandSkeleton(webcamCtx, lm, 'rgba(255, 50, 50, 0.9)');
+                    return; 
+                }
+                
+                // 2. OK手势检测 (Draw) - 必须先激活
+                if (pinchDist < 0.08 && otherFingersAvg > 0.25) {
+                    if (STATE.readyToDraw) {
+                        // 已经张手激活过，允许抽取
+                        drawHandSkeleton(webcamCtx, lm, 'rgba(75, 156, 211, 0.9)'); // Blue highlight
+                        drawOkHighlight(webcamCtx, thumb, index, [middle, ring, pinky]);
+                        updateHint("✨ 正在抽取幸运晶卡... ✨");
+
+                        if (!STATE.focusTarget) {
+                            const candidates = particleSystem.filter(p => {
+                                if (p.type !== 'STRIP') return false;
+                                const card = fortuneDatabase.find(c => c.id === p.dbId);
+                                return card && !card.isDrawn;
+                            });
+                            
+                            if (candidates.length > 0) {
+                                const selectedParticle = candidates[Math.floor(Math.random() * candidates.length)];
+                                selectedParticle.isDrawn = true;
+                                const card = fortuneDatabase.find(c => c.id === selectedParticle.dbId);
+                                if(card) card.isDrawn = true;
+                                STATE.focusTarget = selectedParticle.mesh;
+                                STATE.mode = 'FOCUS'; 
+                            }
+                        }
+                    } else {
+                        // 未激活，提示用户
+                        updateHint("⚠️ 请先张开手掌，激活星阵能量");
+                        drawHandSkeleton(webcamCtx, lm, 'rgba(100, 100, 100, 0.5)'); // 灰色提示未激活
+                    }
+                } 
+                // 3. 张开手掌检测 (Activate / Scatter)
+                else if (avgDist > 0.35 && pinchDist > 0.1) {
+                    if (STATE.mode !== 'FOCUS') { 
+                        STATE.mode = 'SCATTER'; STATE.focusTarget = null; 
+                        STATE.readyToDraw = true; // 激活！
+                        updateHint("🌟 能量已激活! 请比 OK 手势抽取 🌟");
+                    }
+                }
+            } else { 
+                STATE.hand.detected = false;
+                webcamCtx.fillStyle = "rgba(255, 255, 255, 0.5)"; webcamCtx.font = "12px Arial"; webcamCtx.textAlign = "center";
+                webcamCtx.save(); webcamCtx.translate(webcamCanvas.width, 0); webcamCtx.scale(-1, 1);
+                webcamCtx.fillText("寻找手势...", webcamCanvas.width / 2, webcamCanvas.height / 2);
+                webcamCtx.restore();
+            }
+        }
+
+        function drawHandSkeleton(ctx, landmarks, color) {
+            const w = ctx.canvas.width; const h = ctx.canvas.height;
+            const connections = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17],[0,17]];
+            ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = color; 
+            ctx.beginPath(); connections.forEach(([i, j]) => { ctx.moveTo(landmarks[i].x * w, landmarks[i].y * h); ctx.lineTo(landmarks[j].x * w, landmarks[j].y * h); }); ctx.stroke();
+            ctx.fillStyle = '#ffffff'; landmarks.forEach(p => { ctx.beginPath(); ctx.arc(p.x * w, p.y * h, 2, 0, 2 * Math.PI); ctx.fill(); });
+        }
+
+        function drawOkHighlight(ctx, thumb, index, otherTips) {
+            const w = ctx.canvas.width; const h = ctx.canvas.height;
+            const cx = (thumb.x + index.x) / 2 * w; const cy = (thumb.y + index.y) / 2 * h;
+            const gradient = ctx.createRadialGradient(cx, cy, 5, cx, cy, 20);
+            gradient.addColorStop(0, 'rgba(75, 156, 211, 0.8)'); gradient.addColorStop(1, 'rgba(75, 156, 211, 0)');
+            ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(cx, cy, 20, 0, 2 * Math.PI); ctx.fill();
+            ctx.strokeStyle = '#4B9CD3'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(thumb.x * w, thumb.y * h); ctx.lineTo(index.x * w, index.y * h); ctx.stroke();
+            ctx.fillStyle = '#4B9CD3'; otherTips.forEach(tip => { ctx.beginPath(); ctx.arc(tip.x * w, tip.y * h, 4, 0, 2 * Math.PI); ctx.fill(); });
+        }
+
+        function setupEvents() {
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            if (STATE.mode === 'SCATTER' && STATE.hand.detected) {
+                const targetRotY = STATE.hand.x * Math.PI * 0.9; const targetRotX = STATE.hand.y * Math.PI * 0.25;
+                STATE.rotation.y += (targetRotY - STATE.rotation.y) * 3.0 * dt; STATE.rotation.x += (targetRotX - STATE.rotation.x) * 3.0 * dt;
+            } else {
+                 // UPDATED: Allow rotation in both LOGO and FOCUS modes
+                 // This keeps the background alive while reading the card
+                 STATE.rotation.y += 0.04 * dt; 
+                 STATE.rotation.x = Math.sin(clock.elapsedTime * 0.3) * 0.05;
+            }
+            
+            mainGroup.rotation.y = STATE.rotation.y; mainGroup.rotation.x = STATE.rotation.x;
+            mainGroup.updateMatrixWorld();
+            particleSystem.forEach(p => p.update(dt, STATE.mode, STATE.focusTarget));
+            composer.render();
+        }
+
+        init();
+    </script>
+</body>
+</html>
